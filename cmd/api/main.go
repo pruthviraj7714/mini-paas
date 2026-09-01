@@ -3,6 +3,11 @@ package main
 import (
 	"context"
 	"log"
+	"mini-paas/internal/config"
+	"mini-paas/internal/database"
+	"mini-paas/internal/handlers"
+	"mini-paas/internal/repository"
+	"mini-paas/internal/service"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +19,21 @@ import (
 
 func main() {
 	router := gin.Default()
+
+	cfg := config.LoadConfig()
+
+	db, err := database.ConnectPostgres(cfg.DatabaseURL)
+
+	if err != nil {
+		panic("error while connecting with database")
+	}
+
+	userRepo := repository.NewUserRepository(db)
+	userService := service.NewUserService(userRepo)
+	userHandler := handlers.NewUserHandler(userService)
+
+	router.POST("/register", userHandler.Register)
+	router.POST("/login", userHandler.Register)
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
