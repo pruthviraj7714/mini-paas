@@ -33,7 +33,7 @@ func main() {
 	userHandler := handlers.NewUserHandler(userService)
 
 	router.POST("/register", userHandler.Register)
-	router.POST("/login", userHandler.Register)
+	router.POST("/login", userHandler.Login)
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
