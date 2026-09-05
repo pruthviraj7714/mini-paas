@@ -6,6 +6,7 @@ import (
 	"mini-paas/internal/config"
 	"mini-paas/internal/database"
 	"mini-paas/internal/handlers"
+	"mini-paas/internal/middlewares"
 	"mini-paas/internal/repository"
 	"mini-paas/internal/service"
 	"net/http"
@@ -28,16 +29,33 @@ func main() {
 		panic("error while connecting with database")
 	}
 
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
 	userRepo := repository.NewUserRepository(db)
 	userService := service.NewUserService(userRepo)
 	userHandler := handlers.NewUserHandler(userService)
 
-	router.POST("/register", userHandler.Register)
-	router.POST("/login", userHandler.Login)
+	authRouter := router.Group("/auth")
 
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
+	{
+		authRouter.POST("/register", userHandler.Register)
+		authRouter.POST("/login", userHandler.Login)
+	}
+
+	projectRepo := repository.NewProjectRepository(db)
+	projectService := service.NewProjectService(projectRepo)
+	projectHandler := handlers.NewProjectHandler(projectService)
+
+	projectRouter := router.Group("/projects")
+	{
+		projectRouter.Use(middlewares.AuthMiddleware())
+		projectRouter.POST("/", projectHandler.AddProject)
+		projectRouter.GET("/", projectHandler.GetProjects)
+		projectRouter.GET("/:id", projectHandler.GetProject)
+		projectRouter.DELETE("/:id", projectHandler.DeleteProject)
+	}
 
 	srv := &http.Server{
 		Addr:    ":8080",
