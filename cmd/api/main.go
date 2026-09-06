@@ -33,28 +33,45 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
+	projectRepo := repository.NewProjectRepository(db)
+	projectService := service.NewProjectService(projectRepo)
+	projectHandler := handlers.NewProjectHandler(projectService)
+
+	deploymentRepo := repository.NewDeploymentRepository(db)
+	deploymentService := service.NewDeploymentService(
+		deploymentRepo,
+		projectRepo,
+	)
+	deploymentHandler := handlers.NewDeploymentHandler(deploymentService)
+
 	userRepo := repository.NewUserRepository(db)
 	userService := service.NewUserService(userRepo)
 	userHandler := handlers.NewUserHandler(userService)
 
 	authRouter := router.Group("/auth")
-
 	{
 		authRouter.POST("/register", userHandler.Register)
 		authRouter.POST("/login", userHandler.Login)
 	}
 
-	projectRepo := repository.NewProjectRepository(db)
-	projectService := service.NewProjectService(projectRepo)
-	projectHandler := handlers.NewProjectHandler(projectService)
+	protected := router.Group("/")
+	protected.Use(middlewares.AuthMiddleware())
 
-	projectRouter := router.Group("/projects")
+	projectRouter := protected.Group("/projects")
 	{
-		projectRouter.Use(middlewares.AuthMiddleware())
 		projectRouter.POST("/", projectHandler.AddProject)
 		projectRouter.GET("/", projectHandler.GetProjects)
-		projectRouter.GET("/:id", projectHandler.GetProject)
-		projectRouter.DELETE("/:id", projectHandler.DeleteProject)
+		projectRouter.GET("/:projectID", projectHandler.GetProject)
+		projectRouter.DELETE("/:projectID", projectHandler.DeleteProject)
+
+		projectRouter.POST("/:projectID/deployments", deploymentHandler.CreateDeployment)
+		projectRouter.GET("/:projectID/deployments", deploymentHandler.GetDeployments)
+	}
+
+	deploymentRouter := protected.Group("/deployments")
+	{
+		deploymentRouter.GET("/:deploymentID", deploymentHandler.GetDeploymentByID)
+		deploymentRouter.PUT("/:deploymentID/status", deploymentHandler.UpdateStatus)
 	}
 
 	srv := &http.Server{

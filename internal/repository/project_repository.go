@@ -53,3 +53,21 @@ func (r *ProjectRepository) DeleteProject(ctx context.Context, userID, projectID
 
 	return nil
 }
+
+func (r *ProjectRepository) CreateDeployment(ctx context.Context, deployment *models.Deployment) (models.DeploymentStatus, error) {
+	if err := r.DB.WithContext(ctx).Create(&deployment).Error; err != nil {
+		return "", nil
+	}
+
+	return deployment.Status, nil
+}
+
+func (r *ProjectRepository) FindDeploymentsByProjectID(ctx context.Context, userID, projectID uuid.UUID) ([]*models.Deployment, error) {
+	var deployments []*models.Deployment
+
+	if err := r.DB.WithContext(ctx).Preload("Project").Where("project_id = ? AND user_id = ?", projectID, userID).Find(&deployments).Error; err != nil {
+		return nil, err
+	}
+
+	return deployments, nil
+}

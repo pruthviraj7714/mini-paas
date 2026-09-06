@@ -58,7 +58,7 @@ func (h *ProjectHandler) AddProject(c *gin.Context) {
 
 func (h *ProjectHandler) GetProject(c *gin.Context) {
 
-	projectID, exists := c.Params.Get("id")
+	projectID, exists := c.Params.Get("projectID")
 
 	if !exists {
 		c.JSON(http.StatusNotFound, gin.H{
@@ -130,7 +130,7 @@ func (h *ProjectHandler) GetProjects(c *gin.Context) {
 }
 
 func (h *ProjectHandler) DeleteProject(c *gin.Context) {
-	projectID, exists := c.Params.Get("id")
+	projectID, exists := c.Params.Get("projectID")
 
 	if !exists {
 		c.JSON(http.StatusNotFound, gin.H{

@@ -33,3 +33,11 @@ func (s *ProjectService) GetProjects(ctx context.Context, userID uuid.UUID) ([]*
 func (s *ProjectService) DeleteProject(ctx context.Context, userID, projectID uuid.UUID) error {
 	return s.ProjectRepo.DeleteProject(ctx, userID, projectID)
 }
+
+func (s *ProjectService) CreateDeployment(ctx context.Context, deployment *models.Deployment) (models.DeploymentStatus, error) {
+	return s.ProjectRepo.CreateDeployment(ctx, deployment)
+}
+
+func (s *ProjectService) GetDeploymentsByProjectID(ctx context.Context, userID, projectID uuid.UUID) ([]*models.Deployment, error) {
+	return s.ProjectRepo.FindDeploymentsByProjectID(ctx, userID, projectID)
+}
