@@ -19,12 +19,12 @@ func NewDeploymentRepository(db *gorm.DB) *DeploymentRepository {
 	}
 }
 
-func (r *DeploymentRepository) Create(ctx context.Context, deployment *models.Deployment) (models.DeploymentStatus, error) {
+func (r *DeploymentRepository) Create(ctx context.Context, deployment *models.Deployment) (*models.Deployment, error) {
 	if err := r.DB.WithContext(ctx).Create(&deployment).Error; err != nil {
-		return "", nil
+		return nil, nil
 	}
 
-	return deployment.Status, nil
+	return deployment, nil
 }
 
 func (r *DeploymentRepository) FindByID(ctx context.Context, userID, deploymentID uuid.UUID) (*models.Deployment, error) {
@@ -41,10 +41,10 @@ func (r *DeploymentRepository) FindByID(ctx context.Context, userID, deploymentI
 	return deployment, nil
 }
 
-func (r *DeploymentRepository) FindByProjectID(ctx context.Context, userID, projectID uuid.UUID) ([]*models.Deployment, error) {
+func (r *DeploymentRepository) FindByProjectID(ctx context.Context, projectID uuid.UUID) ([]*models.Deployment, error) {
 	var deployments []*models.Deployment
 
-	if err := r.DB.WithContext(ctx).Preload("Project").Where("project_id = ? AND user_id = ?", projectID, userID).Find(&deployments).Error; err != nil {
+	if err := r.DB.WithContext(ctx).Where("project_id = ?", projectID).Find(&deployments).Error; err != nil {
 		return nil, err
 	}
 

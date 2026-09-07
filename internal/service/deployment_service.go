@@ -20,9 +20,24 @@ func NewDeploymentService(deploymentRepo *repository.DeploymentRepository, proje
 	}
 }
 
-func (s *DeploymentService) CreateDeployment(ctx context.Context, deployment *models.Deployment) (models.DeploymentStatus, error) {
+func (s *DeploymentService) CreateDeployment(ctx context.Context, projectID, userID uuid.UUID) (*models.Deployment, error) {
 
-	return s.DeploymentRepo.Create(ctx, deployment)
+	_, err := s.ProjectRepo.GetProjectByID(ctx, userID, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	deployment := &models.Deployment{
+		ProjectID: projectID,
+		Status:    models.QUEUED,
+	}
+
+	createdDeployment, err := s.DeploymentRepo.Create(ctx, deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	return createdDeployment, nil
 }
 
 func (s *DeploymentService) GetDeployment(ctx context.Context, userID, deploymentID uuid.UUID) (*models.Deployment, error) {
@@ -30,7 +45,13 @@ func (s *DeploymentService) GetDeployment(ctx context.Context, userID, deploymen
 }
 
 func (s *DeploymentService) ListProjectDeployments(ctx context.Context, userID, projectID uuid.UUID) ([]*models.Deployment, error) {
-	return s.DeploymentRepo.FindByProjectID(ctx, userID, projectID)
+
+	_, err := s.ProjectRepo.GetProjectByID(ctx, userID, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.DeploymentRepo.FindByProjectID(ctx, projectID)
 }
 
 func (s *DeploymentService) TransitionDeployment() {

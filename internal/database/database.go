@@ -10,7 +10,7 @@ import (
 func ConnectPostgres(connStr string) (*gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(connStr), &gorm.Config{})
 
-	db.AutoMigrate(&models.User{}, &models.Project{})
+	db.AutoMigrate(&models.User{}, &models.Project{}, &models.Deployment{})
 
 	return db, err
 }
