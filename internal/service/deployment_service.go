@@ -20,11 +20,11 @@ func NewDeploymentService(deploymentRepo *repository.DeploymentRepository, proje
 	}
 }
 
-func (s *DeploymentService) CreateDeployment(ctx context.Context, projectID, userID uuid.UUID) (*models.Deployment, error) {
+func (s *DeploymentService) CreateDeployment(ctx context.Context, projectID, userID uuid.UUID) (*models.Deployment, string, error) {
 
-	_, err := s.ProjectRepo.GetProjectByID(ctx, userID, projectID)
+	project, err := s.ProjectRepo.GetProjectByID(ctx, userID, projectID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	deployment := &models.Deployment{
@@ -34,10 +34,10 @@ func (s *DeploymentService) CreateDeployment(ctx context.Context, projectID, use
 
 	createdDeployment, err := s.DeploymentRepo.Create(ctx, deployment)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return createdDeployment, nil
+	return createdDeployment, project.RepositoryURL, nil
 }
 
 func (s *DeploymentService) GetDeployment(ctx context.Context, userID, deploymentID uuid.UUID) (*models.Deployment, error) {

@@ -1,8 +1,12 @@
 package handlers
 
 import (
+	"fmt"
+	"log"
 	"mini-paas/internal/service"
+	"mini-paas/internal/workspace"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -10,11 +14,13 @@ import (
 
 type DeploymentHandler struct {
 	DeploymentService *service.DeploymentService
+	WorkspaceManager  *workspace.WorkspaceManager
 }
 
-func NewDeploymentHandler(deploymentService *service.DeploymentService) *DeploymentHandler {
+func NewDeploymentHandler(deploymentService *service.DeploymentService, workspaceManager *workspace.WorkspaceManager) *DeploymentHandler {
 	return &DeploymentHandler{
 		DeploymentService: deploymentService,
+		WorkspaceManager:  workspaceManager,
 	}
 }
 
@@ -53,7 +59,7 @@ func (h *DeploymentHandler) CreateDeployment(c *gin.Context) {
 		return
 	}
 
-	deployment, err := h.DeploymentService.CreateDeployment(c.Request.Context(), parsedProjectID, parsedID)
+	deployment, repoURL, err := h.DeploymentService.CreateDeployment(c.Request.Context(), parsedProjectID, parsedID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -61,6 +67,26 @@ func (h *DeploymentHandler) CreateDeployment(c *gin.Context) {
 		})
 		return
 	}
+
+	dir, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(dir)
+
+	err = os.MkdirAll(dir+"/internal/project/"+deployment.ID.String(), 0755)
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "error while creating project dir",
+		})
+		return
+	}
+
+	res, err := h.WorkspaceManager.GitRunner.Clone(c.Request.Context(), repoURL, dir+"/internal/project/"+deployment.ID.String())
+
+	fmt.Print(res)
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":     deployment.ID,

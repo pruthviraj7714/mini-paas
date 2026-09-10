@@ -5,10 +5,12 @@ import (
 	"log"
 	"mini-paas/internal/config"
 	"mini-paas/internal/database"
+	"mini-paas/internal/git"
 	"mini-paas/internal/handlers"
 	"mini-paas/internal/middlewares"
 	"mini-paas/internal/repository"
 	"mini-paas/internal/service"
+	"mini-paas/internal/workspace"
 	"net/http"
 	"os"
 	"os/signal"
@@ -33,6 +35,10 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
+	runner := git.Runner{}
+
+	workspaceManager := workspace.NewWorkspaceManager(&runner)
+
 	projectRepo := repository.NewProjectRepository(db)
 	projectService := service.NewProjectService(projectRepo)
 	projectHandler := handlers.NewProjectHandler(projectService)
@@ -42,7 +48,7 @@ func main() {
 		deploymentRepo,
 		projectRepo,
 	)
-	deploymentHandler := handlers.NewDeploymentHandler(deploymentService)
+	deploymentHandler := handlers.NewDeploymentHandler(deploymentService, workspaceManager)
 
 	userRepo := repository.NewUserRepository(db)
 	userService := service.NewUserService(userRepo)
