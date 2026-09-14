@@ -5,6 +5,7 @@ import (
 	"log"
 	"mini-paas/internal/config"
 	"mini-paas/internal/database"
+	"mini-paas/internal/docker"
 	"mini-paas/internal/git"
 	"mini-paas/internal/handlers"
 	"mini-paas/internal/middlewares"
@@ -17,11 +18,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	router := gin.Default()
+
+	router.Use(cors.Default())
 
 	cfg := config.LoadConfig()
 
@@ -34,6 +38,15 @@ func main() {
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
+
+	dockerClient, err := docker.NewDockerClient()
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dockerClient.Close()
+
+	dockerManager := docker.NewManager(dockerClient)
 
 	runner := git.Runner{}
 
@@ -48,7 +61,7 @@ func main() {
 		deploymentRepo,
 		projectRepo,
 	)
-	deploymentHandler := handlers.NewDeploymentHandler(deploymentService, workspaceManager)
+	deploymentHandler := handlers.NewDeploymentHandler(deploymentService, workspaceManager, dockerManager)
 
 	userRepo := repository.NewUserRepository(db)
 	userService := service.NewUserService(userRepo)

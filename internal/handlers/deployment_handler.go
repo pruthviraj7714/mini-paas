@@ -3,10 +3,12 @@ package handlers
 import (
 	"fmt"
 	"log"
+	"mini-paas/internal/docker"
 	"mini-paas/internal/service"
 	"mini-paas/internal/workspace"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,12 +17,14 @@ import (
 type DeploymentHandler struct {
 	DeploymentService *service.DeploymentService
 	WorkspaceManager  *workspace.WorkspaceManager
+	DockerManager     *docker.DockerManager
 }
 
-func NewDeploymentHandler(deploymentService *service.DeploymentService, workspaceManager *workspace.WorkspaceManager) *DeploymentHandler {
+func NewDeploymentHandler(deploymentService *service.DeploymentService, workspaceManager *workspace.WorkspaceManager, dockerManager *docker.DockerManager) *DeploymentHandler {
 	return &DeploymentHandler{
 		DeploymentService: deploymentService,
 		WorkspaceManager:  workspaceManager,
+		DockerManager:     dockerManager,
 	}
 }
 
@@ -73,20 +77,47 @@ func (h *DeploymentHandler) CreateDeployment(c *gin.Context) {
 		log.Fatal(err)
 	}
 
-	fmt.Println(dir)
+	projectDir := filepath.Join(
+		dir,
+		"internal",
+		"project",
+		deployment.ID.String(),
+	)
 
-	err = os.MkdirAll(dir+"/internal/project/"+deployment.ID.String(), 0755)
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "error while creating project dir",
+	if err := os.MkdirAll(projectDir, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to create project directory",
 		})
 		return
 	}
 
-	res, err := h.WorkspaceManager.GitRunner.Clone(c.Request.Context(), repoURL, dir+"/internal/project/"+deployment.ID.String())
+	_, err = h.WorkspaceManager.GitRunner.Clone(
+		c.Request.Context(),
+		repoURL,
+		projectDir,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to clone repository",
+		})
+		return
+	}
 
-	fmt.Print(res)
+	imageName := fmt.Sprintf(
+		"mini-paas:%s",
+		deployment.ID.String(),
+	)
+
+	if err := h.DockerManager.Build(
+		c.Request.Context(),
+		projectDir,
+		imageName,
+	); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to build image",
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":     deployment.ID,

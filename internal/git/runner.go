@@ -33,14 +33,6 @@ func (r *Runner) Clone(ctx context.Context, repoURL string, destination string) 
 	cmd.Stderr = &stderrBuf
 
 	err := cmd.Run()
-	if err != nil {
-		return &Result{
-			Stdout:  stdoutBuf.String(),
-			Stderr:  stderrBuf.String(),
-			Success: false,
-			Message: err.Error(),
-		}, err
-	}
 
 	stdoutStr := stdoutBuf.String()
 	stderrStr := stderrBuf.String()
