@@ -7,11 +7,12 @@ import (
 	"os"
 
 	"github.com/moby/go-archive"
+	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 )
 
 type Manager interface {
-	Build(ctx context.Context, contextDir string, imageName string, deploymentID string) error
+	Build(ctx context.Context, contextDir string, imageName string) error
 	Run(ctx context.Context, imageName string, containerName string, command string) error
 	Stop(ctx context.Context, containerID string) error
 	Remove(ctx context.Context, containerID string) error
@@ -65,6 +66,21 @@ func (m *DockerManager) Build(
 }
 
 func (m *DockerManager) Run(ctx context.Context, imageName string, containerName string, command string) error {
+
+	ops := client.ContainerCreateOptions{
+		Name: containerName,
+		Config: &container.Config{
+			Image: imageName,
+		},
+	}
+
+	res, err := m.client.ContainerCreate(ctx, ops)
+	if err != nil {
+		return fmt.Errorf("create container: %w", err)
+	}
+
+	fmt.Println("Container created:", res.ID)
+
 	return nil
 }
 

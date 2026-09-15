@@ -50,6 +50,6 @@ func (r *DeploymentRepository) FindByProjectID(ctx context.Context, projectID uu
 
 	return deployments, nil
 }
-func (r *DeploymentRepository) UpdateStatus() {
-
+func (r *DeploymentRepository) UpdateStatus(ctx context.Context, deploymentID uuid.UUID, status models.DeploymentStatus) error {
+	return r.DB.WithContext(ctx).Model(&models.Deployment{}).Where("id = ?", deploymentID).Update("status", status).Error
 }

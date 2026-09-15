@@ -1,14 +1,12 @@
 package handlers
 
 import (
-	"fmt"
-	"log"
 	"mini-paas/internal/docker"
+	"mini-paas/internal/events"
+	"mini-paas/internal/rabbitmq"
 	"mini-paas/internal/service"
 	"mini-paas/internal/workspace"
 	"net/http"
-	"os"
-	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -18,13 +16,13 @@ type DeploymentHandler struct {
 	DeploymentService *service.DeploymentService
 	WorkspaceManager  *workspace.WorkspaceManager
 	DockerManager     *docker.DockerManager
+	Producer          *rabbitmq.Producer
 }
 
-func NewDeploymentHandler(deploymentService *service.DeploymentService, workspaceManager *workspace.WorkspaceManager, dockerManager *docker.DockerManager) *DeploymentHandler {
+func NewDeploymentHandler(deploymentService *service.DeploymentService, producer *rabbitmq.Producer) *DeploymentHandler {
 	return &DeploymentHandler{
 		DeploymentService: deploymentService,
-		WorkspaceManager:  workspaceManager,
-		DockerManager:     dockerManager,
+		Producer:          producer,
 	}
 }
 
@@ -72,52 +70,44 @@ func (h *DeploymentHandler) CreateDeployment(c *gin.Context) {
 		return
 	}
 
-	dir, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
+	payload := events.DeploymentJobPayload{
+		ProjectID:    parsedProjectID,
+		DeploymentID: deployment.ID,
+		RepoURL:      repoURL,
+		CommitSHA:    deployment.ID.String(),
 	}
 
-	projectDir := filepath.Join(
-		dir,
-		"internal",
-		"project",
-		deployment.ID.String(),
-	)
-
-	if err := os.MkdirAll(projectDir, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "failed to create project directory",
-		})
-		return
-	}
-
-	_, err = h.WorkspaceManager.GitRunner.Clone(
-		c.Request.Context(),
-		repoURL,
-		projectDir,
-	)
+	err = h.Producer.PublishDeploymentJob(c.Request.Context(), payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "failed to clone repository",
+			"message": "failed to publish deployment job",
 		})
 		return
 	}
 
-	imageName := fmt.Sprintf(
-		"mini-paas:%s",
-		deployment.ID.String(),
-	)
+	// projectDir, err := h.WorkspaceManager.PrepareWorkspace(c.Request.Context(), repoURL, deployment.ID.String())
+	// if err != nil {
+	// 	c.JSON(http.StatusInternalServerError, gin.H{
+	// 		"message": "failed to prepare workspace",
+	// 	})
+	// 	return
+	// }
 
-	if err := h.DockerManager.Build(
-		c.Request.Context(),
-		projectDir,
-		imageName,
-	); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "failed to build image",
-		})
-		return
-	}
+	// imageName := fmt.Sprintf(
+	// 	"mini-paas:%s",
+	// 	deployment.ID.String(),
+	// )
+
+	// if err := h.DockerManager.Build(
+	// 	c.Request.Context(),
+	// 	projectDir,
+	// 	imageName,
+	// ); err != nil {
+	// 	c.JSON(http.StatusInternalServerError, gin.H{
+	// 		"message": "failed to build image",
+	// 	})
+	// 	return
+	// }
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":     deployment.ID,

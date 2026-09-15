@@ -2,27 +2,30 @@ package service
 
 import (
 	"context"
+	"mini-paas/internal/events"
 	"mini-paas/internal/models"
 	"mini-paas/internal/repository"
 
 	"github.com/google/uuid"
 )
 
-type DeploymentService struct {
-	DeploymentRepo *repository.DeploymentRepository
-	ProjectRepo    *repository.ProjectRepository
+type Publisher interface {
+	PublishDeploymentJob(ctx context.Context, payload events.DeploymentJobPayload) error
 }
 
-func NewDeploymentService(deploymentRepo *repository.DeploymentRepository, projectRepo *repository.ProjectRepository) *DeploymentService {
-	return &DeploymentService{
-		DeploymentRepo: deploymentRepo,
-		ProjectRepo:    projectRepo,
-	}
+type DeploymentService struct {
+	deploymentRepo *repository.DeploymentRepository
+	projectRepo    *repository.ProjectRepository
+	producer       Publisher
+}
+
+func NewDeploymentService(dr *repository.DeploymentRepository, pr *repository.ProjectRepository, p Publisher) *DeploymentService {
+	return &DeploymentService{deploymentRepo: dr, projectRepo: pr, producer: p}
 }
 
 func (s *DeploymentService) CreateDeployment(ctx context.Context, projectID, userID uuid.UUID) (*models.Deployment, string, error) {
 
-	project, err := s.ProjectRepo.GetProjectByID(ctx, userID, projectID)
+	project, err := s.projectRepo.GetProjectByID(ctx, userID, projectID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -32,7 +35,7 @@ func (s *DeploymentService) CreateDeployment(ctx context.Context, projectID, use
 		Status:    models.QUEUED,
 	}
 
-	createdDeployment, err := s.DeploymentRepo.Create(ctx, deployment)
+	createdDeployment, err := s.deploymentRepo.Create(ctx, deployment)
 	if err != nil {
 		return nil, "", err
 	}
@@ -41,17 +44,17 @@ func (s *DeploymentService) CreateDeployment(ctx context.Context, projectID, use
 }
 
 func (s *DeploymentService) GetDeployment(ctx context.Context, userID, deploymentID uuid.UUID) (*models.Deployment, error) {
-	return s.DeploymentRepo.FindByID(ctx, userID, deploymentID)
+	return s.deploymentRepo.FindByID(ctx, userID, deploymentID)
 }
 
 func (s *DeploymentService) ListProjectDeployments(ctx context.Context, userID, projectID uuid.UUID) ([]*models.Deployment, error) {
 
-	_, err := s.ProjectRepo.GetProjectByID(ctx, userID, projectID)
+	_, err := s.projectRepo.GetProjectByID(ctx, userID, projectID)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.DeploymentRepo.FindByProjectID(ctx, projectID)
+	return s.deploymentRepo.FindByProjectID(ctx, projectID)
 }
 
 func (s *DeploymentService) TransitionDeployment() {

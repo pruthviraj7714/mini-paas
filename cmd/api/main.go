@@ -5,93 +5,54 @@ import (
 	"log"
 	"mini-paas/internal/config"
 	"mini-paas/internal/database"
-	"mini-paas/internal/docker"
-	"mini-paas/internal/git"
-	"mini-paas/internal/handlers"
-	"mini-paas/internal/middlewares"
+	"mini-paas/internal/httpapi"
+	"mini-paas/internal/rabbitmq"
 	"mini-paas/internal/repository"
 	"mini-paas/internal/service"
-	"mini-paas/internal/workspace"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	router := gin.Default()
-
-	router.Use(cors.Default())
-
 	cfg := config.LoadConfig()
 
 	db, err := database.ConnectPostgres(cfg.DatabaseURL)
-
 	if err != nil {
-		panic("error while connecting with database")
+		log.Fatal("error while connecting with database:", err)
 	}
 
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	dockerClient, err := docker.NewDockerClient()
-
+	mq, err := rabbitmq.NewRabbitMQ(cfg.RabbitMQURL)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer dockerClient.Close()
+	defer func() {
+		if err := mq.Close(); err != nil {
+			log.Println("failed to close RabbitMQ:", err)
+		}
+	}()
+	producer := rabbitmq.NewProducer(mq)
 
-	dockerManager := docker.NewManager(dockerClient)
-
-	runner := git.Runner{}
-
-	workspaceManager := workspace.NewWorkspaceManager(&runner)
-
+	// repos
 	projectRepo := repository.NewProjectRepository(db)
-	projectService := service.NewProjectService(projectRepo)
-	projectHandler := handlers.NewProjectHandler(projectService)
-
 	deploymentRepo := repository.NewDeploymentRepository(db)
-	deploymentService := service.NewDeploymentService(
-		deploymentRepo,
-		projectRepo,
-	)
-	deploymentHandler := handlers.NewDeploymentHandler(deploymentService, workspaceManager, dockerManager)
-
 	userRepo := repository.NewUserRepository(db)
+
+	// services
+	projectService := service.NewProjectService(projectRepo)
+	deploymentService := service.NewDeploymentService(deploymentRepo, projectRepo, producer)
 	userService := service.NewUserService(userRepo)
-	userHandler := handlers.NewUserHandler(userService)
 
-	authRouter := router.Group("/auth")
-	{
-		authRouter.POST("/register", userHandler.Register)
-		authRouter.POST("/login", userHandler.Login)
+	deps := httpapi.Dependencies{
+		ProjectService:    projectService,
+		DeploymentService: deploymentService,
+		UserService:       userService,
+		Producer:          producer,
 	}
 
-	protected := router.Group("/")
-	protected.Use(middlewares.AuthMiddleware())
-
-	projectRouter := protected.Group("/projects")
-	{
-		projectRouter.POST("/", projectHandler.AddProject)
-		projectRouter.GET("/", projectHandler.GetProjects)
-		projectRouter.GET("/:projectID", projectHandler.GetProject)
-		projectRouter.DELETE("/:projectID", projectHandler.DeleteProject)
-
-		projectRouter.POST("/:projectID/deployments", deploymentHandler.CreateDeployment)
-		projectRouter.GET("/:projectID/deployments", deploymentHandler.GetDeployments)
-	}
-
-	deploymentRouter := protected.Group("/deployments")
-	{
-		deploymentRouter.GET("/:deploymentID", deploymentHandler.GetDeploymentByID)
-		deploymentRouter.PUT("/:deploymentID/status", deploymentHandler.UpdateStatus)
-	}
+	router := httpapi.NewRouter(deps)
 
 	srv := &http.Server{
 		Addr:    ":8080",
@@ -115,6 +76,5 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatal("Server forced to shutdown: ", err)
 	}
-
 	log.Println("Server exiting")
 }
